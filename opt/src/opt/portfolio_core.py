@@ -1,9 +1,21 @@
+from __future__ import annotations
+
 import enum
-from typing import List, Mapping, Optional, Protocol, Sequence, Tuple
+from typing import List, Mapping, Optional, Protocol, Sequence, Tuple, runtime_checkable, TYPE_CHECKING
 
 import numpy as np
 from numpy.typing import NDArray
-from pydantic import BaseModel, Field, root_validator, validator
+from pydantic import BaseModel, Field, validator, ConfigDict, model_validator
+
+
+
+class OptBaseModel(BaseModel):
+    """Base model with numpy support."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+if TYPE_CHECKING:  # pragma: no cover - used only for type hints
+    from .synthetic import SyntheticInstrument, PerInstrumentCostModel
 
 try:
     import mosek.fusion as mf
@@ -23,7 +35,7 @@ class QuantityType(str, enum.Enum):
 # 2. Portfolio container (unchanged)
 # ---------------------------------------------------------------------------
 
-class Portfolio(BaseModel):
+class Portfolio(OptBaseModel):
     positions: NDArray[np.floating]
     quantity_type: QuantityType = QuantityType.WEIGHT
     nav: float = 1.0
@@ -47,7 +59,7 @@ class Portfolio(BaseModel):
 # 3. Instrument mapping
 # ---------------------------------------------------------------------------
 
-class InstrumentMap(BaseModel):
+class InstrumentMap(OptBaseModel):
     """Dense matrix **E** mapping decision variables → risk exposures."""
 
     E: NDArray[np.floating]
@@ -73,12 +85,12 @@ class InstrumentMap(BaseModel):
 # 4. Risk‑model layer
 # ---------------------------------------------------------------------------
 
-class FactorRiskModelData(BaseModel):
+class FactorRiskModelData(OptBaseModel):
     loadings: NDArray[np.floating]
     factor_cov: NDArray[np.floating]
     specific_var: NDArray[np.floating]
 
-class FactorRiskModel(BaseModel):
+class FactorRiskModel(OptBaseModel):
     data: FactorRiskModelData
 
     def systematic_risk(self, w_exp: NDArray[np.floating]) -> float:
@@ -95,10 +107,11 @@ class FactorRiskModel(BaseModel):
 # 5. Transaction‑cost models
 # ---------------------------------------------------------------------------
 
+@runtime_checkable
 class TransactionCostModel(Protocol):
     def cost_soc(self, M: "mf.Model", delta_dec: "mf.Expr") -> "mf.Expr": ...  # noqa: F821
 
-class PowerLawCost(BaseModel):
+class PowerLawCost(OptBaseModel):
     exponent: float = Field(1.5, gt=1, lt=2)
     scale: float = 1e-4
 
@@ -117,7 +130,7 @@ def abs_expr(M: "mf.Model", x: "mf.Expr", name: str) -> "mf.Var":  # noqa: F821
     M.constraint(-x <= u)
     return u
 
-class ConstraintSpec(BaseModel):
+class ConstraintSpec(OptBaseModel):
     def apply(self, M: "mf.Model", w_dec: "mf.Expr", w_exp: "mf.Expr") -> None:  # noqa: F821
         ...
 
@@ -176,12 +189,12 @@ class FactorBoundConstraint(ConstraintSpec):
 # 7. Utility & ProblemConfig
 # ---------------------------------------------------------------------------
 
-class UtilityConfig(BaseModel):
+class UtilityConfig(OptBaseModel):
     risk_aversion_sys: float = 1.0
     risk_aversion_spec: float = 1.0
     cost_model: Optional[TransactionCostModel] = None
 
-class ProblemConfig(BaseModel):
+class ProblemConfig(OptBaseModel):
     risk_model: FactorRiskModel
     instrument_map: InstrumentMap
     alpha_dec: NDArray[np.floating]
@@ -189,28 +202,42 @@ class ProblemConfig(BaseModel):
     start_dec: NDArray[np.floating] = Field(default_factory=lambda: np.array([]))
     utility: UtilityConfig = UtilityConfig()
     constraints: List[ConstraintSpec] = Field(default_factory=list)
+    synthetic_instruments: List["SyntheticInstrument"] = Field(default_factory=list)
 
-    @root_validator
-    def _defaults(cls, v):  # noqa: N805
-        E = v["instrument_map"].E
+    @model_validator(mode="after")
+    def _defaults(cls, v: "ProblemConfig") -> "ProblemConfig":  # noqa: N805
+        if v.synthetic_instruments:
+            from .synthetic import PerInstrumentCostModel, extend_instrument_map
+
+            imap, alpha_dec, cm_list = extend_instrument_map(
+                v.instrument_map,
+                v.alpha_dec,
+                v.synthetic_instruments,
+                base_cost_model=v.utility.cost_model,
+            )
+            v.instrument_map = imap
+            v.alpha_dec = alpha_dec
+            v.utility.cost_model = PerInstrumentCostModel(models=cm_list)
+
+        E = v.instrument_map.E
         n_dec = E.shape[1]
-        if v["start_dec"].size == 0:
-            v["start_dec"] = np.zeros(n_dec)
-        if v["alpha_exp"] is None:
-            v["alpha_exp"] = np.zeros(E.shape[0])
+        if v.start_dec.size == 0:
+            v.start_dec = np.zeros(n_dec)
+        if v.alpha_exp is None:
+            v.alpha_exp = np.zeros(E.shape[0])
         return v
 
 # ---------------------------------------------------------------------------
 # 8. Result wrapper
 # ---------------------------------------------------------------------------
 
-class PortfolioResult(BaseModel):
+class PortfolioResult(OptBaseModel):
     decision_weights: NDArray[np.floating]
     exposure_weights: NDArray[np.floating]
     obj_value: float
     risk_sys: float
     risk_spec: float
-    cost: float
+cost: float
 
 # ---------------------------------------------------------------------------
 # 9. Optimiser
