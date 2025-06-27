@@ -4,14 +4,11 @@ import numpy as np
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "opt", "src"))
 
-from opt.portfolio_core import (
-    InstrumentMap,
-    FactorRiskModel, FactorRiskModelData,
-    ProblemConfig, UtilityConfig,
-    PowerLawCost,
-    apply_synthetics,
-)
-from opt.synthetic import SyntheticInstrument
+from opt.instruments import InstrumentMap
+from opt.risk import FactorRiskModel, FactorRiskModelData
+from opt.config import ProblemConfig, UtilityConfig
+from opt.costs import PowerLawCost
+from opt.synthetic import SyntheticInstrument, apply_synthetics
 
 
 def base_config():

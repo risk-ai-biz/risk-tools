@@ -8,7 +8,10 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 import numpy as np
 from numpy.typing import NDArray
 
-from .portfolio_core import InstrumentMap, TransactionCostModel, OptBaseModel
+from .core import OptBaseModel
+from .instruments import InstrumentMap
+from .costs import TransactionCostModel
+from .config import ProblemConfig
 
 
 
@@ -82,7 +85,6 @@ def load_synthetics_csv(path: str) -> List[SyntheticInstrument]:
     return out
 
 
-from .portfolio_core import InstrumentMap, TransactionCostModel, OptBaseModel
 
 
 class PerInstrumentCostModel(OptBaseModel):
@@ -135,3 +137,21 @@ def extend_instrument_map(
     E_new = np.hstack(E_parts)
     imap = InstrumentMap(E=E_new, names_risk=base_map.names_risk, names_decision=names_decision)
     return imap, np.array(alpha_list, dtype=float), cost_models
+
+
+def apply_synthetics(
+    cfg: ProblemConfig,
+    synthetics: Sequence[SyntheticInstrument],
+) -> ProblemConfig:
+    """Return new config with ``synthetics`` added to ``cfg``."""
+
+    imap, alpha_dec, cost_models = extend_instrument_map(
+        cfg.instrument_map,
+        cfg.alpha_dec,
+        synthetics,
+        cfg.utility.cost_model,
+    )
+
+    util = cfg.utility.model_copy()
+    util.cost_model = PerInstrumentCostModel(models=cost_models)
+    return cfg.model_copy(update={"instrument_map": imap, "alpha_dec": alpha_dec, "utility": util})
