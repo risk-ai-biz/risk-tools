@@ -1,9 +1,9 @@
 import enum
-from typing import List, Mapping, Optional, Protocol, Sequence, Tuple
+from typing import Any, List, Mapping, Optional, Protocol, Sequence, Tuple
 
 import numpy as np
 from numpy.typing import NDArray
-from pydantic import BaseModel, Field, root_validator, validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 
 try:
     import mosek.fusion as mf
@@ -19,11 +19,17 @@ class QuantityType(str, enum.Enum):
     WEIGHT = "weight"
     NOTIONAL = "notional"
 
+
+class OptBaseModel(BaseModel):
+    """Base model with numpy compatibility."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
 # ---------------------------------------------------------------------------
 # 2. Portfolio container (unchanged)
 # ---------------------------------------------------------------------------
 
-class Portfolio(BaseModel):
+class Portfolio(OptBaseModel):
     positions: NDArray[np.floating]
     quantity_type: QuantityType = QuantityType.WEIGHT
     nav: float = 1.0
@@ -47,14 +53,14 @@ class Portfolio(BaseModel):
 # 3. Instrument mapping
 # ---------------------------------------------------------------------------
 
-class InstrumentMap(BaseModel):
+class InstrumentMap(OptBaseModel):
     """Dense matrix **E** mapping decision variables → risk exposures."""
 
     E: NDArray[np.floating]
     names_risk: List[str]
     names_decision: List[str]
 
-    @validator("E")
+    @field_validator("E")
     def _2d(cls, v):  # noqa: N805
         if v.ndim != 2:
             raise ValueError("Instrument matrix must be 2‑D")
@@ -73,12 +79,12 @@ class InstrumentMap(BaseModel):
 # 4. Risk‑model layer
 # ---------------------------------------------------------------------------
 
-class FactorRiskModelData(BaseModel):
+class FactorRiskModelData(OptBaseModel):
     loadings: NDArray[np.floating]
     factor_cov: NDArray[np.floating]
     specific_var: NDArray[np.floating]
 
-class FactorRiskModel(BaseModel):
+class FactorRiskModel(OptBaseModel):
     data: FactorRiskModelData
 
     def systematic_risk(self, w_exp: NDArray[np.floating]) -> float:
@@ -98,7 +104,7 @@ class FactorRiskModel(BaseModel):
 class TransactionCostModel(Protocol):
     def cost_soc(self, M: "mf.Model", delta_dec: "mf.Expr") -> "mf.Expr": ...  # noqa: F821
 
-class PowerLawCost(BaseModel):
+class PowerLawCost(OptBaseModel):
     exponent: float = Field(1.5, gt=1, lt=2)
     scale: float = 1e-4
 
@@ -117,7 +123,7 @@ def abs_expr(M: "mf.Model", x: "mf.Expr", name: str) -> "mf.Var":  # noqa: F821
     M.constraint(-x <= u)
     return u
 
-class ConstraintSpec(BaseModel):
+class ConstraintSpec(OptBaseModel):
     def apply(self, M: "mf.Model", w_dec: "mf.Expr", w_exp: "mf.Expr") -> None:  # noqa: F821
         ...
 
@@ -176,12 +182,12 @@ class FactorBoundConstraint(ConstraintSpec):
 # 7. Utility & ProblemConfig
 # ---------------------------------------------------------------------------
 
-class UtilityConfig(BaseModel):
+class UtilityConfig(OptBaseModel):
     risk_aversion_sys: float = 1.0
     risk_aversion_spec: float = 1.0
-    cost_model: Optional[TransactionCostModel] = None
+    cost_model: Optional[Any] = None
 
-class ProblemConfig(BaseModel):
+class ProblemConfig(OptBaseModel):
     risk_model: FactorRiskModel
     instrument_map: InstrumentMap
     alpha_dec: NDArray[np.floating]
@@ -190,21 +196,21 @@ class ProblemConfig(BaseModel):
     utility: UtilityConfig = UtilityConfig()
     constraints: List[ConstraintSpec] = Field(default_factory=list)
 
-    @root_validator
-    def _defaults(cls, v):  # noqa: N805
-        E = v["instrument_map"].E
+    @model_validator(mode="after")
+    def _defaults(cls, v: "ProblemConfig") -> "ProblemConfig":
+        E = v.instrument_map.E
         n_dec = E.shape[1]
-        if v["start_dec"].size == 0:
-            v["start_dec"] = np.zeros(n_dec)
-        if v["alpha_exp"] is None:
-            v["alpha_exp"] = np.zeros(E.shape[0])
+        if v.start_dec.size == 0:
+            v.start_dec = np.zeros(n_dec)
+        if v.alpha_exp is None:
+            v.alpha_exp = np.zeros(E.shape[0])
         return v
 
 # ---------------------------------------------------------------------------
 # 8. Result wrapper
 # ---------------------------------------------------------------------------
 
-class PortfolioResult(BaseModel):
+class PortfolioResult(OptBaseModel):
     decision_weights: NDArray[np.floating]
     exposure_weights: NDArray[np.floating]
     obj_value: float
@@ -281,3 +287,32 @@ class ConvexFactorOptimizer:
 def optimize_portfolio(cfg: ProblemConfig) -> PortfolioResult:
     """Solve *cfg* with the default optimiser instance."""
     return ConvexFactorOptimizer().solve(cfg)
+
+
+# ---------------------------------------------------------------------------
+# 11. Synthetic instrument helper
+# ---------------------------------------------------------------------------
+
+def apply_synthetics(
+    cfg: ProblemConfig, synthetics: Sequence["SyntheticInstrument"]
+) -> ProblemConfig:
+    """Return new config with ``synthetics`` added to ``cfg``.
+
+    The instrument map and alpha vector are extended using
+    :func:`opt.synthetic.extend_instrument_map`.  A
+    :class:`opt.synthetic.PerInstrumentCostModel` is returned which plugs into
+    ``cfg.utility.cost_model``.
+    """
+
+    from .synthetic import PerInstrumentCostModel, extend_instrument_map
+
+    imap, alpha_dec, cost_models = extend_instrument_map(
+        cfg.instrument_map,
+        cfg.alpha_dec,
+        synthetics,
+        cfg.utility.cost_model,
+    )
+
+    util = cfg.utility.model_copy()
+    util.cost_model = PerInstrumentCostModel(models=cost_models)
+    return cfg.model_copy(update={"instrument_map": imap, "alpha_dec": alpha_dec, "utility": util})
