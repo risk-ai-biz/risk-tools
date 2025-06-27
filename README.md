@@ -1,8 +1,8 @@
 # risk-tools
 
 This repository contains a small portfolio optimisation toolkit used in
-examples and tests.  The main functionality lives in
-`opt/src/opt/portfolio_core.py`.
+examples and tests.  Functionality is split across several modules
+under `opt/src/opt/`.
 
 ## Synthetic instruments
 
@@ -24,7 +24,7 @@ syn = SyntheticInstrument(
 )
 ```
 
-Use :func:`opt.portfolio_core.apply_synthetics` to extend an existing
+Use :func:`opt.synthetic.apply_synthetics` to extend an existing
 ``ProblemConfig`` with a collection of synthetic instruments.  Individual
 synthetic cost models are combined using
 :class:`opt.synthetic.PerInstrumentCostModel` and automatically placed in the
