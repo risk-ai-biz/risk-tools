@@ -122,8 +122,15 @@ def make_long_only_problem(
     instrument_map: InstrumentMap,
     alpha_dec: NDArray[np.floating],
     groups: Sequence[str],
+    *,
+    quantity_type: QuantityType = QuantityType.WEIGHT,
 ) -> ProblemConfig:
-    builder = ProblemBuilder(risk_model, instrument_map, alpha_dec)
+    builder = ProblemBuilder(
+        risk_model=risk_model,
+        instrument_map=instrument_map,
+        alpha_dec=alpha_dec,
+        quantity_type=quantity_type,
+    )
     n = instrument_map.shape[1]
     builder.add_bounds(range(n), lower=0.0, upper=0.6)
     builder.add_gross_limit(3.0)
@@ -138,8 +145,15 @@ def make_long_short_problem(
     alpha_dec: NDArray[np.floating],
     start_dec: NDArray[np.floating],
     groups: Sequence[str],
+    *,
+    quantity_type: QuantityType = QuantityType.WEIGHT,
 ) -> ProblemConfig:
-    builder = ProblemBuilder(risk_model, instrument_map, alpha_dec)
+    builder = ProblemBuilder(
+        risk_model=risk_model,
+        instrument_map=instrument_map,
+        alpha_dec=alpha_dec,
+        quantity_type=quantity_type,
+    )
     builder.start_dec = start_dec
     builder.add_bounds(range(instrument_map.shape[1]), lower=-0.5, upper=0.5)
     builder.add_turnover_limit(0.5)
