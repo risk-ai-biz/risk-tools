@@ -3,6 +3,7 @@ from numpy.typing import NDArray
 from pydantic import model_validator
 
 from .core import OptBaseModel
+from .utils import value_of
 
 
 class PortfolioResult(OptBaseModel):
@@ -16,9 +17,7 @@ class PortfolioResult(OptBaseModel):
     @staticmethod
     def _as_numpy(v: object) -> object:
         """Return numbers/arrays from MOSEK expressions or raw values."""
-        if hasattr(v, "level"):
-            v = v.level()
-        return np.asarray(v, dtype=float) if np.ndim(v) else float(v)
+        return value_of(v)
 
     @model_validator(mode="before")
     def _coerce(cls, values: dict) -> dict:  # noqa: D401,N805 - pydantic API
