@@ -103,7 +103,7 @@ def make_long_only_problem():
 def make_long_short_problem():
     cfg = apply_synthetics(base_config_10(), load_all_synthetics())
     n_dec = cfg.instrument_map.shape[1]
-    start = 0.1 * np.ones(n_dec)
+    start = np.zeros(n_dec)
     cfg.start_dec = start
     cfg.constraints = [
         InstrumentBoundConstraint(idx=list(range(n_dec)), lower=-0.5, upper=0.5),

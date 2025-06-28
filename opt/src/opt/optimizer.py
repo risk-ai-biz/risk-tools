@@ -14,6 +14,15 @@ except ImportError:  # pragma: no cover – unit-test builds without MOSEK
 class ConvexFactorOptimizer:
     """Conic optimiser with synthetic-instrument mapping."""
 
+    @staticmethod
+    def _check_status(status: "mf.SolutionStatus") -> None:  # noqa: F821
+        """Raise :class:`OptimizeError` if solution status is not optimal."""
+        import mosek.fusion as mf
+
+        ok = {mf.SolutionStatus.Optimal, mf.SolutionStatus.NearOptimal}
+        if status not in ok:
+            raise mf.OptimizeError(f"solver status {status}")
+
     def solve(self, cfg: ProblemConfig) -> PortfolioResult:  # noqa: C901
         if mf is None:
             raise ImportError("MOSEK not available in this environment.")
@@ -66,6 +75,7 @@ class ConvexFactorOptimizer:
             M.objective(mf.ObjectiveSense.Maximize, reward - penalty)
             M.setLogHandler(None)
             M.solve()
+            self._check_status(M.getPrimalSolutionStatus())
 
             w_dec_val = value_of(w_dec)
             if cfg.utility.cost_model is not None:

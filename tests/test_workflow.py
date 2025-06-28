@@ -6,7 +6,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", "opt", "src"))
 
 from opt.instruments import InstrumentMap
 from opt.risk import FactorRiskModel, FactorRiskModelData
-from opt.workflow import ProblemBuilder, make_long_only_problem
+from opt.workflow import ProblemBuilder, make_long_only_problem, make_long_short_problem
 from opt.core import QuantityType
 from opt.costs import PowerLawCost
 from opt.optimizer import optimize_portfolio
@@ -71,3 +71,25 @@ def test_builder_notional_and_cash():
     cfg = builder.build()
 
     assert cfg.instrument_map.shape[1] == n + 1
+
+
+def test_make_long_short_notional():
+    n = 3
+    imap = InstrumentMap.identity(n)
+    alpha = np.linspace(0.1, 0.3, n)
+    loadings = np.eye(n)
+    frmd = FactorRiskModelData(loadings=loadings, factor_cov=np.eye(n), specific_var=0.1 * np.ones(n))
+    rm = FactorRiskModel(data=frmd)
+
+    start = np.zeros(n)
+    groups = ["g1"] * n
+    cfg = make_long_short_problem(
+        rm,
+        imap,
+        alpha,
+        start,
+        groups,
+        quantity_type=QuantityType.NOTIONAL,
+    )
+
+    assert cfg.start_dec.shape[0] == n
