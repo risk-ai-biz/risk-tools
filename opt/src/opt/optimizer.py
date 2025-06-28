@@ -2,6 +2,7 @@ import numpy as np
 
 from .config import ProblemConfig
 from .result import PortfolioResult
+from .utils import value_of
 
 try:
     import mosek.fusion as mf
@@ -66,12 +67,9 @@ class ConvexFactorOptimizer:
             M.setLogHandler(None)
             M.solve()
 
-            w_dec_val = w_dec.level()
+            w_dec_val = value_of(w_dec)
             if cfg.utility.cost_model is not None:
-                if hasattr(cost_expr, "level"):
-                    cost_val = float(cost_expr.level()[0])
-                else:
-                    cost_val = float(cost_expr)
+                cost_val = float(np.ravel(value_of(cost_expr))[0])
             else:
                 cost_val = 0.0
 
@@ -79,8 +77,8 @@ class ConvexFactorOptimizer:
                 decision_weights=w_dec_val,
                 exposure_weights=E @ w_dec_val,
                 obj_value=M.primalObjValue(),
-                risk_sys=t_sys.level()[0],
-                risk_spec=t_spec.level()[0],
+                risk_sys=float(np.ravel(value_of(t_sys))[0]),
+                risk_spec=float(np.ravel(value_of(t_spec))[0]),
                 cost=cost_val,
             )
 
