@@ -11,12 +11,16 @@ from .risk import FactorRiskModel
 
 
 class UtilityConfig(OptBaseModel):
+    """Risk aversion and transaction cost parameters."""
+
     risk_aversion_sys: float = 1.0
     risk_aversion_spec: float = 1.0
     cost_model: Optional[Any] = None
 
 
 class ProblemConfig(OptBaseModel):
+    """Complete specification of an optimisation problem."""
+
     risk_model: FactorRiskModel
     instrument_map: InstrumentMap
     alpha_dec: NDArray[np.floating]
