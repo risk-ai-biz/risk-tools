@@ -32,3 +32,22 @@ resulting config.
 
 Raw instrument definitions can be loaded from CSV using
 :func:`opt.synthetic.load_synthetics_csv`.
+
+## Problem setup
+
+Optimisation problems are described by :class:`opt.config.ProblemConfig`.  The
+main fields are:
+
+* ``instrument_map`` (often called ``E``) — matrix mapping decision weights to
+  risk exposures.
+* ``alpha_dec`` — expected returns for each decision variable.
+* ``alpha_exp`` — optional expected returns per risk exposure.
+* ``start_dec`` — starting portfolio weights used for turnover and cost
+  calculations.
+* ``risk_model`` — provides systematic and specific risk measures.
+* ``utility`` — risk aversion and transaction cost settings.
+* ``constraints`` — list of additional :class:`opt.constraints.ConstraintSpec`
+  instances.
+
+Within the optimiser the decision weights are referred to as ``w_dec`` while the
+corresponding risk exposures are ``w_exp``.

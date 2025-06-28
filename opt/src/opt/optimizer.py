@@ -66,13 +66,22 @@ class ConvexFactorOptimizer:
             M.setLogHandler(None)
             M.solve()
 
+            w_dec_val = w_dec.level()
+            if cfg.utility.cost_model is not None:
+                if hasattr(cost_expr, "level"):
+                    cost_val = float(cost_expr.level()[0])
+                else:
+                    cost_val = float(cost_expr)
+            else:
+                cost_val = 0.0
+
             return PortfolioResult(
-                decision_weights=w_dec.level(),
-                exposure_weights=(E @ w_dec).level(),
+                decision_weights=w_dec_val,
+                exposure_weights=E @ w_dec_val,
                 obj_value=M.primalObjValue(),
                 risk_sys=t_sys.level()[0],
                 risk_spec=t_spec.level()[0],
-                cost=float(cost_expr.level()[0]) if cfg.utility.cost_model else 0.0,
+                cost=cost_val,
             )
 
 
