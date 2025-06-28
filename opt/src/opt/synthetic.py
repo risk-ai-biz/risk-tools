@@ -103,7 +103,7 @@ class PerInstrumentCostModel(OptBaseModel):
             exprs.append(cm.cost_soc(M, slice_i))
         if not exprs:
             return 0.0
-        return mf.sum(mf.vstack(exprs))
+        return mf.Expr.sum(mf.Expr.vstack(exprs))
 
 
 def extend_instrument_map(
@@ -154,4 +154,12 @@ def apply_synthetics(
 
     util = cfg.utility.model_copy()
     util.cost_model = PerInstrumentCostModel(models=cost_models)
-    return cfg.model_copy(update={"instrument_map": imap, "alpha_dec": alpha_dec, "utility": util})
+    start_dec = np.concatenate([cfg.start_dec, np.zeros(len(synthetics))])
+    return cfg.model_copy(
+        update={
+            "instrument_map": imap,
+            "alpha_dec": alpha_dec,
+            "utility": util,
+            "start_dec": start_dec,
+        }
+    )

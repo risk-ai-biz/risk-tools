@@ -17,5 +17,7 @@ class PowerLawCost(OptBaseModel):
     def cost_soc(self, M: "mf.Model", delta_dec: "mf.Expr") -> "mf.Expr":  # noqa: F821
         import mosek.fusion as mf
 
-        beta = abs_expr(M, delta_dec, "beta_cost")
-        return self.scale * mf.sum(beta)
+        import uuid
+
+        beta = abs_expr(M, delta_dec, f"beta_cost_{uuid.uuid4().hex}")
+        return self.scale * mf.Expr.sum(beta)

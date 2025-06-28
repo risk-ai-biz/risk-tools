@@ -1,0 +1,5 @@
+name,underlying,weight,alpha_overlay
+FUTA,A0,0.5,0.01
+FUTA,A1,0.5,
+ETFB,A2,0.6,0
+ETFB,A3,0.4,0.02
