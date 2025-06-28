@@ -28,18 +28,25 @@ class ConvexFactorOptimizer:
             # Risk cones -----------------------------------------------------
             rm = cfg.risk_model
             B, F = rm.data.loadings, rm.data.factor_cov
-            A_sys = B @ np.linalg.cholesky(F)  # (n_risk, n_factors)
+            A_sys = np.linalg.cholesky(F) @ B.T  # (n_factor, n_risk)
             D_sqrt = np.sqrt(rm.data.specific_var)
             A_spec = np.diag(D_sqrt)
 
             t_sys = M.variable("t_sys")
-            M.constraint(mf.vstack(0.5, t_sys, A_sys @ w_exp) == mf.Domain.inRotatedQCone())
+            M.constraint(
+                mf.Expr.vstack(0.5, t_sys, A_sys @ w_exp)
+                == mf.Domain.inRotatedQCone()
+            )
             t_spec = M.variable("t_spec")
-            M.constraint(mf.vstack(0.5, t_spec, A_spec @ w_exp) == mf.Domain.inRotatedQCone())
+            M.constraint(
+                mf.Expr.vstack(0.5, t_spec, A_spec @ w_exp)
+                == mf.Domain.inRotatedQCone()
+            )
 
             # Transaction cost ---------------------------------------------
             if cfg.utility.cost_model is not None:
-                delta_dec = w_dec - cfg.start_dec
+                const_start = mf.Expr.constTerm(cfg.start_dec)
+                delta_dec = mf.Expr.sub(w_dec, const_start)
                 cost_expr = cfg.utility.cost_model.cost_soc(M, delta_dec)
             else:
                 cost_expr = 0.0
@@ -49,13 +56,13 @@ class ConvexFactorOptimizer:
                 c.apply(M, w_dec, w_exp)
 
             # Objective -----------------------------------------------------
-            reward = cfg.alpha_dec @ w_dec + cfg.alpha_exp @ w_exp  # type: ignore[arg-type]
+            reward = mf.Expr.dot(w_dec, cfg.alpha_dec) + mf.Expr.dot(w_exp, cfg.alpha_exp)
             penalty = (
                 cfg.utility.risk_aversion_sys * t_sys
                 + cfg.utility.risk_aversion_spec * t_spec
                 + cost_expr
             )
-            M.maximize(reward - penalty)
+            M.objective(mf.ObjectiveSense.Maximize, reward - penalty)
             M.setLogHandler(None)
             M.solve()
 

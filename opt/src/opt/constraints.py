@@ -38,7 +38,7 @@ class InstrumentTurnoverConstraint(ConstraintSpec):
     def apply(self, M: "mf.Model", w_dec: "mf.Expr", w_exp: "mf.Expr") -> None:  # noqa: F821
         delta = w_dec - self.start_dec
         u = abs_expr(M, delta, "turnover_abs")
-        M.constraint(mf.sum(u) <= self.limit)
+        M.constraint(mf.Expr.sum(u) <= self.limit)
 
 
 # --- Exposure-side constraints -------------------------------------------
@@ -47,7 +47,7 @@ class GrossExposureConstraint(ConstraintSpec):
 
     def apply(self, M: "mf.Model", w_dec: "mf.Expr", w_exp: "mf.Expr") -> None:  # noqa: F821
         u = abs_expr(M, w_exp, "gross_abs")
-        M.constraint(mf.sum(u) <= self.limit)
+        M.constraint(mf.Expr.sum(u) <= self.limit)
 
 
 class NetExposureConstraint(ConstraintSpec):
@@ -55,7 +55,7 @@ class NetExposureConstraint(ConstraintSpec):
     upper: float = np.inf
 
     def apply(self, M: "mf.Model", w_dec: "mf.Expr", w_exp: "mf.Expr") -> None:  # noqa: F821
-        s = mf.sum(w_exp)
+        s = mf.Expr.sum(w_exp)
         if np.isfinite(self.lower):
             M.constraint(s >= self.lower)
         if np.isfinite(self.upper):
