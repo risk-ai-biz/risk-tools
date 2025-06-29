@@ -384,6 +384,81 @@ def evaluate_stability_over_time(results: List[WindowResult]) -> pl.DataFrame:
         )
     return pl.DataFrame(rows)
 
+# ---------------------------------------------------------------------------
+# Visualisation helper – **NEW**
+# ---------------------------------------------------------------------------
+
+def plot_feature_distributions(
+    agg: pl.DataFrame,
+    labels: np.ndarray,
+    *,
+    feature_cols: Sequence[str] | None = None,
+    kind: str = "hist",  # 'hist' or 'kde'
+    bins: int = 50,
+    height: float = 3.5,
+    aspect: float = 1.2,
+    col_wrap: int = 3,
+    sharex: bool = False,
+    palette: str | Sequence[str] | None = None,
+):
+    """Return a Seaborn *FacetGrid* showing per‑cluster distributions.
+
+    Parameters
+    ----------
+    agg : pl.DataFrame
+        Counterparty‑level dataframe (one row per counterparty,
+        feature columns numeric).
+    labels : np.ndarray
+        Cluster labels aligned to `agg.rows` order.
+    feature_cols : list[str] | None, default None
+        Which columns to plot.  Defaults to *all* numeric columns *except*
+        the entity/id and volume totals (heuristic).
+    kind : {'hist', 'kde'}
+        Plot type per facet.
+    bins : int, default 50
+        Number of histogram bins (if ``kind='hist'``).
+    height, aspect, col_wrap, sharex : seaborn.FacetGrid parameters.
+    palette : optional palette or iterable for cluster hues.
+
+    Returns
+    -------
+    seaborn.axisgrid.FacetGrid
+    """
+    if feature_cols is None:
+        # choose numeric columns other than obvious IDs / labels
+        feature_cols = [
+            c
+            for c, dt in zip(agg.columns, agg.dtypes)
+            if dt in (pl.Float64, pl.Int64) and c not in {"cluster", "total_volume"}
+        ]
+
+    df_plot = (
+        agg.with_columns(pl.Series("cluster", labels))
+        .select(["cluster", *feature_cols])
+        .melt(id_vars="cluster", value_vars=feature_cols, variable_name="feature", value_name="value")
+        .to_pandas()
+    )
+
+    grid = sns.FacetGrid(
+        df_plot,
+        col="feature",
+        hue="cluster",
+        col_wrap=col_wrap,
+        height=height,
+        aspect=aspect,
+        sharex=sharex,
+        palette=palette,
+    )
+
+    if kind == "hist":
+        grid.map(sns.histplot, "value", bins=bins, stat="density", alpha=0.6).add_legend()
+    elif kind == "kde":
+        grid.map(sns.kdeplot, "value", fill=True).add_legend()
+    else:
+        raise ValueError("kind must be 'hist' or 'kde'")
+
+    return grid.fig
+
 
 # ---------------------------------------------------------------------------
 # Example CLI / smoke‑test
